@@ -80,43 +80,7 @@ def build_json(data, tags, fields, measurement):
     return json
 
 # post to db
-def post_to_DB(client,data):
-    for x in range(data.shape[0]):
-        for y in range(data.shape[1]):
-            ap_value = float(data.iloc[[x],[y]].values)
-            #print(data.iloc[[x],[1]].values)
-            #rint(data.iloc[[x],[1]].dtypes.index[0])
-            timestamp = data.iloc[[x],[1]].axes[0].tolist()[0]
-            #pd.to_timedelta(data.iloc[[x],[1]].axes[0].tolist()[0]).dt.total_seconds().astype(int)
-            d = timestamp.to_pydatetime()
-            #print(d)
-            pushTime = int(time.mktime(d.timetuple()))
-            #print(pushTime)
-            #print(pd.to_timedelta(data).dt.total_seconds().astype(int))
-            #print(type(timestamp))
-            #print(timestamp)
-            #print("time is " + int(data.iloc[[x],[1]].axes[0].tolist()[0]))
-            #print(datetime.fromtimestamp(timestamp))
-            pushData =[
-                    {
-                        "measurement": "wifi_data",
-                        "tags": {
-                            "ap_name": data.iloc[[x],[y]].dtypes.index[0],
-                            "building_number": 90,
-                            "floor": 2,
-                            "room": 50
-                        },
-                        "time": pushTime,
-                        "fields": {
-                            "AP_count": ap_value
-                        }
-                    }
-                ]
-            if (math.isnan(ap_value)):
-                print("found nan value")
-            else:
-                ret = post_to_DB(client,pushData)
-                print("we posting")
+def post_to_DB(client,json):
     ret = client.write_points(json)
     return ret
 
