@@ -1,6 +1,7 @@
 import time
 import json
 import pandas as pd
+import math
 from influxdb import InfluxDBClient
 from influxdb import DataFrameClient
 from datetime import datetime, timedelta
@@ -11,6 +12,7 @@ import argparse
 #import ConfigParser
 import subprocess
 import numpy as np
+from datetime import datetime
 
 class Wifi_Push:
     def __init__(self, host='localhost', port=8086, database='wifi',
@@ -78,15 +80,50 @@ def build_json(data, tags, fields, measurement):
     return json
 
 # post to db
-def post_to_DB(client,json):
-
+def post_to_DB(client,data):
+    for x in range(data.shape[0]):
+        for y in range(data.shape[1]):
+            ap_value = float(data.iloc[[x],[y]].values)
+            #print(data.iloc[[x],[1]].values)
+            #rint(data.iloc[[x],[1]].dtypes.index[0])
+            timestamp = data.iloc[[x],[1]].axes[0].tolist()[0]
+            #pd.to_timedelta(data.iloc[[x],[1]].axes[0].tolist()[0]).dt.total_seconds().astype(int)
+            d = timestamp.to_pydatetime()
+            #print(d)
+            pushTime = int(time.mktime(d.timetuple()))
+            #print(pushTime)
+            #print(pd.to_timedelta(data).dt.total_seconds().astype(int))
+            #print(type(timestamp))
+            #print(timestamp)
+            #print("time is " + int(data.iloc[[x],[1]].axes[0].tolist()[0]))
+            #print(datetime.fromtimestamp(timestamp))
+            pushData =[
+                    {
+                        "measurement": "wifi_data",
+                        "tags": {
+                            "ap_name": data.iloc[[x],[y]].dtypes.index[0],
+                            "building_number": 90,
+                            "floor": 2,
+                            "room": 50
+                        },
+                        "time": pushTime,
+                        "fields": {
+                            "AP_count": ap_value
+                        }
+                    }
+                ]
+            if (math.isnan(ap_value)):
+                print("found nan value")
+            else:
+                ret = post_to_DB(client,pushData)
+                print("we posting")
     ret = client.write_points(json)
-
     return ret
 
 obj = Wifi_Push()
 
 data = obj.get_wifi_data('201603.pkl')
+print(data.head().reset_index().to_json(orient='records'))
 
 measurement = 'Wifi_AP'
 tags = 'ap_name'
@@ -95,29 +132,56 @@ fields = 'connected_devices'
 #    print(data)
 
 print(data.head())
-json = build_json(data, tags, fields, measurement)
+
 host='localhost'
 port=8086
 database='wifi'
 username='admin'
 password='password'
-client = get_DB_client(host=host,username=username,database=database,port=port,ssl=True,verify_ssl=True)
-ret = post_to_DB(client,json)
+client = get_DB_client(host=host,username=username,password=password,database=database,port=port,ssl=True,verify_ssl=True)
 
-'''
-if data.empty:
-    exit()
-else:
-    counter = 0
+ap_value = float(data.iloc[0:1,0:1].values)
+print(ap_value)
+headers = data.iloc[0:1,0:1].dtypes.index
+print(headers[0])
+print(data.shape)
+print(data.shape[0])
+client = get_DB_client(host=host,username=username,password=password,database=database,port=port,ssl=False,verify_ssl=True)
+##data.axes[].tolist()
 
-    while (counter < 5):
-        success = obj.push_data_cloud_db(data, measurement=measurement)
-        print("We get here")
-        if success:
-            break
+for x in range(data.shape[0]):
+    for y in range(data.shape[1]):
+        ap_value = float(data.iloc[[x],[y]].values)
+        #print(data.iloc[[x],[1]].values)
+        #rint(data.iloc[[x],[1]].dtypes.index[0])
+        timestamp = data.iloc[[x],[1]].axes[0].tolist()[0]
+        #pd.to_timedelta(data.iloc[[x],[1]].axes[0].tolist()[0]).dt.total_seconds().astype(int)
+        d = timestamp.to_pydatetime()
+        #print(d)
+        pushTime = int(time.mktime(d.timetuple()))
+        #print(pushTime)
+        #print(pd.to_timedelta(data).dt.total_seconds().astype(int))
+        #print(type(timestamp))
+        #print(timestamp)
+        #print("time is " + int(data.iloc[[x],[1]].axes[0].tolist()[0]))
+        #print(datetime.fromtimestamp(timestamp))
+        pushData =[
+                {
+                    "measurement": "wifi_data",
+                    "tags": {
+                        "ap_name": data.iloc[[x],[y]].dtypes.index[0],
+                        "building_number": 90,
+                        "floor": 2,
+                        "room": 50
+                    },
+                    "time": pushTime,
+                    "fields": {
+                        "AP_count": ap_value
+                    }
+                }
+            ]
+        if (math.isnan(ap_value)):
+            print("found nan value")
         else:
-            counter += 1
-            time.sleep(60)
-        if (counter == 5):
-            print("Error: Try again later.")
-'''
+            ret = post_to_DB(client,pushData)
+            print("we posting")
