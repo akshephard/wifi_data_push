@@ -5,7 +5,7 @@ import math
 from influxdb import InfluxDBClient
 from influxdb import DataFrameClient
 from datetime import datetime, timedelta
-import datetime
+import datetime######################## MAIN ########################
 import pytz
 import hashlib
 import argparse
@@ -13,42 +13,6 @@ import configparser
 import subprocess
 import numpy as np
 from datetime import datetime
-
-class Wifi_Push:
-    def __init__(self, host='localhost', port=8086, database='wifi',
-        username='admin', password='password', measurement='wifi_data', tag='ap_name', field_name='AP_count', pickle_file='default.pkl'):
-
-        self.host = host
-        self.port = port
-        self.database = database
-        self.username = username
-        self.password = password
-        self.measurement = measurement
-        self.tag = tag
-        self.field_name = field_name
-
-    def get_wifi_data(self, file_name):
-
-        result = pd.read_pickle(file_name)
-        return result
-
-    def push_data_cloud_db(self, data, measurement='Wifi_Test'):
-
-        print("Pushing data to cloud db...")
-
-        client = DataFrameClient(host=self.host, port=self.port, database=self.database,
-                                username=self.username, password=self.password)
-
-        data = data.replace(['inf', '-inf'], np.nan)
-        for c in data.columns:
-            result = client.write_points(data[[c]].dropna(), 'measurement')
-        #result = client.write_points(data, measurement)
-        if not result:
-            print("Error: Could not push data to cloud db")
-            return False
-        else:
-            print("Successfully pushed data to cloud db!")
-            return True
 
 def get_DB_client(host,
                   username,
@@ -106,8 +70,7 @@ def post_to_DB(client,data,measurement,tags,fields):
 
 ######################## MAIN ########################
 
-def main(conf_file="wifi_scraping_config.ini"):
-    obj = Wifi_Push()
+def main(conf_file="wifi_local_config.ini"):
     # read arguments passed at .py file call
     parser = argparse.ArgumentParser()
     parser.add_argument("pickle", help="pickle file")
@@ -133,7 +96,7 @@ def main(conf_file="wifi_scraping_config.ini"):
 
 
     # get and summarize wifi data
-    data = obj.get_wifi_data(pickle_file)
+    data = pd.read_pickle(pickle_file)
 
     # post to db
     client =get_DB_client(host=host,
@@ -141,7 +104,7 @@ def main(conf_file="wifi_scraping_config.ini"):
                           password=password,
                           database=database,
                           port=port,
-                          ssl=True,
+                          ssl=False,
                           verify_ssl=True)
 
     ret = post_to_DB(client,data,measurement,tags,fields)
