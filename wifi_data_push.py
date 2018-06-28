@@ -16,7 +16,7 @@ from datetime import datetime
 
 class Wifi_Push:
     def __init__(self, host='localhost', port=8086, database='wifi',
-        username='admin', password='password'):
+        username='admin', password='password', measurement='wifi_data', tag='ap_name', field_name='AP_count', pickle_file='default.pkl'):
 
         self.host = host
         self.port = port
@@ -26,7 +26,6 @@ class Wifi_Push:
         self.measurement = measurement
         self.tag = tag
         self.field_name = field_name
-        self.pickle_file = pickle_file
 
     def get_wifi_data(self, file_name):
 
@@ -65,14 +64,14 @@ def get_DB_client(host,
 
 
 def post_to_DB(client,data,measurement,tags,fields):
-    for x in range(data.shape[0]):
+    for x in range(data.shape[0]): #loop through all rows
+        #get timestamp as index and convert it to Unix Epoch Pacific Time
         timestamp = data.iloc[[x],[1]].axes[0].tolist()[0]
-        for y in range(data.shape[1]):
+        d = timestamp.to_pydatetime()
+        pushTime = int(time.mktime(d.timetuple()))
+        for y in range(data.shape[1]): #loop through all columns
             #get value from data frame a particular row x and column y
             ap_value = float(data.iloc[[x],[y]].values)
-            #get timestamp as index and convert it to Unix Epoch Pacific Time
-            d = timestamp.to_pydatetime()
-            pushTime = int(time.mktime(d.timetuple()))
             #create formatted json to push to database
             pushData = [
                     {
