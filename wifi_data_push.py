@@ -65,19 +65,28 @@ def get_DB_client(host,
 
 def post_to_DB(client,data,measurement,tags,fields):
     for x in range(data.shape[0]): #loop through all rows
+
         #get timestamp as index and convert it to Unix Epoch Pacific Time
         timestamp = data.iloc[[x],[1]].axes[0].tolist()[0]
         d = timestamp.to_pydatetime()
         pushTime = int(time.mktime(d.timetuple()))
+
         for y in range(data.shape[1]): #loop through all columns
             #get value from data frame a particular row x and column y
             ap_value = float(data.iloc[[x],[y]].values)
+
+            #get column name which the name of the current access point
+            current_ap_name = data.iloc[[x],[y]].dtypes.index[0]
+
+            #parse ap name to map to building information
+            parsed_ap_name = current_ap_name.split('-')
+
             #create formatted json to push to database
             pushData = [
                     {
                         "measurement": measurement,
                         "tags": {
-                            tags: data.iloc[[x],[y]].dtypes.index[0],
+                            tags: current_ap_name,
                             "building_number": 90,
                             "floor": 2,
                             "room": 50
@@ -94,6 +103,8 @@ def post_to_DB(client,data,measurement,tags,fields):
                 if(ret == False):
                     print("Failed to push")
                     break;
+
+######################## MAIN ########################
 
 def main(conf_file="wifi_scraping_config.ini"):
     obj = Wifi_Push()
@@ -134,7 +145,6 @@ def main(conf_file="wifi_scraping_config.ini"):
                           verify_ssl=True)
 
     ret = post_to_DB(client,data,measurement,tags,fields)
-    #print(ret)
 
     return
 
