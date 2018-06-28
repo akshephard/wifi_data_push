@@ -9,7 +9,7 @@ import datetime
 import pytz
 import hashlib
 import argparse
-#import ConfigParser
+import configparser
 import subprocess
 import numpy as np
 from datetime import datetime
@@ -23,6 +23,10 @@ class Wifi_Push:
         self.database = database
         self.username = username
         self.password = password
+        self.measurement = measurement
+        self.tag = tag
+        self.field_name = field_name
+        self.pickle_file = pickle_file
 
     def get_wifi_data(self, file_name):
 
@@ -59,93 +63,81 @@ def get_DB_client(host,
                             ssl=ssl, verify_ssl=verify_ssl)
     return client
 
-def transform_to_dict(s, tags):
 
-    dic = {}
-    for tag in tags:
-        dic[tag] = s[tag]
-
-    return dic
-
-# create json body for influxDB push
-def build_json(data, tags, fields, measurement):
-
-    data = data.reset_index()
-    data["tags"] = data.apply(transform_to_dict, tags=tags, axis=1)
-    data["fields"] = data.apply(transform_to_dict, tags=fields, axis=1)
-    data["time"] = get_current_time_utc()
-    data["measurement"] = measurement
-    json = data[["measurement","time", "tags", "fields"]].to_dict("records")
-
-    return json
-
-# post to db
-def post_to_DB(client,json):
-    ret = client.write_points(json)
-    return ret
-
-obj = Wifi_Push()
-
-data = obj.get_wifi_data('201603.pkl')
-print(data.head().reset_index().to_json(orient='records'))
-
-measurement = 'Wifi_AP'
-tags = 'ap_name'
-fields = 'connected_devices'
-#with pd.option_context('display.max_rows', None, 'display.max_columns', 3):
-#    print(data)
-
-print(data.head())
-
-host='localhost'
-port=8086
-database='wifi'
-username='admin'
-password='password'
-client = get_DB_client(host=host,username=username,password=password,database=database,port=port,ssl=True,verify_ssl=True)
-
-ap_value = float(data.iloc[0:1,0:1].values)
-print(ap_value)
-headers = data.iloc[0:1,0:1].dtypes.index
-print(headers[0])
-print(data.shape)
-print(data.shape[0])
-client = get_DB_client(host=host,username=username,password=password,database=database,port=port,ssl=False,verify_ssl=True)
-##data.axes[].tolist()
-
-for x in range(data.shape[0]):
-    for y in range(data.shape[1]):
-        ap_value = float(data.iloc[[x],[y]].values)
-        #print(data.iloc[[x],[1]].values)
-        #rint(data.iloc[[x],[1]].dtypes.index[0])
+def post_to_DB(client,data,measurement,tags,fields):
+    for x in range(data.shape[0]):
         timestamp = data.iloc[[x],[1]].axes[0].tolist()[0]
-        #pd.to_timedelta(data.iloc[[x],[1]].axes[0].tolist()[0]).dt.total_seconds().astype(int)
-        d = timestamp.to_pydatetime()
-        #print(d)
-        pushTime = int(time.mktime(d.timetuple()))
-        #print(pushTime)
-        #print(pd.to_timedelta(data).dt.total_seconds().astype(int))
-        #print(type(timestamp))
-        #print(timestamp)
-        #print("time is " + int(data.iloc[[x],[1]].axes[0].tolist()[0]))
-        #print(datetime.fromtimestamp(timestamp))
-        pushData =[
-                {
-                    "measurement": "wifi_data",
-                    "tags": {
-                        "ap_name": data.iloc[[x],[y]].dtypes.index[0],
-                        "building_number": 90,
-                        "floor": 2,
-                        "room": 50
-                    },
-                    "time": pushTime,
-                    "fields": {
-                        "AP_count": ap_value
+        for y in range(data.shape[1]):
+            #get value from data frame a particular row x and column y
+            ap_value = float(data.iloc[[x],[y]].values)
+            #get timestamp as index and convert it to Unix Epoch Pacific Time
+            d = timestamp.to_pydatetime()
+            pushTime = int(time.mktime(d.timetuple()))
+            #create formatted json to push to database
+            pushData = [
+                    {
+                        "measurement": measurement,
+                        "tags": {
+                            tags: data.iloc[[x],[y]].dtypes.index[0],
+                            "building_number": 90,
+                            "floor": 2,
+                            "room": 50
+                        },
+                        "time": pushTime,
+                        "fields": {
+                            fields: ap_value
+                        }
                     }
-                }
-            ]
-        if (math.isnan(ap_value)):
-            print("found nan value")
-        else:
-            ret = post_to_DB(client,pushData)
-            print("we posting")
+                ]
+            #check to see if value is NaN before pushing
+            if (not math.isnan(ap_value)):
+                ret = client.write_points(pushData)
+                if(ret == False):
+                    print("Failed to push")
+                    break;
+
+def main(conf_file="wifi_scraping_config.ini"):
+    obj = Wifi_Push()
+    # read arguments passed at .py file call
+    parser = argparse.ArgumentParser()
+    parser.add_argument("pickle", help="pickle file")
+
+    args = parser.parse_args()
+    pickle_file = args.pickle
+
+
+    # read from config file
+    conf_file = conf_file
+    Config = configparser.ConfigParser()
+    Config.read(conf_file)
+    host = Config.get("DB_config", "host")
+    username = Config.get("DB_config", "username")
+    password = Config.get("DB_config", "password")
+    database = Config.get("DB_config", "database")
+    protocol = Config.get("DB_config", "protocol")
+    measurement = Config.get("DB_config","measurement")
+    port = Config.get("DB_config", "port")
+    tags = Config.get("wifi_metadata", "tags")
+    fields = Config.get("wifi_metadata", "fields")
+
+
+
+    # get and summarize wifi data
+    data = obj.get_wifi_data(pickle_file)
+
+    # post to db
+    client =get_DB_client(host=host,
+                          username=username,
+                          password=password,
+                          database=database,
+                          port=port,
+                          ssl=True,
+                          verify_ssl=True)
+
+    ret = post_to_DB(client,data,measurement,tags,fields)
+    #print(ret)
+
+    return
+
+if __name__ == "__main__":
+    main()
