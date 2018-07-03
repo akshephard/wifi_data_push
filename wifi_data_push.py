@@ -13,6 +13,8 @@ import configparser
 import subprocess
 import numpy as np
 from datetime import datetime
+from tabulate import tabulate
+
 '''
 loop over each columnn in dataframe grab column name first and parse name
 add all points as a list of dictionaries of json
@@ -60,12 +62,66 @@ def get_DB_client(host,
                             ssl=ssl, verify_ssl=verify_ssl)
     return client
 
+def time_transform(timestamp):
+    d = timestamp.to_pydatetime()
+    pushTime = int(time.mktime(d.timetuple()))
+    #print(pushTime)
+    return int(pushTime)
+
+def transform_to_dict(s, key):
+    #print(key)
+    dic = {}
+    #print(s)
+    dic[key] = s
+    '''
+    for tag in tags:
+        dic[tag] = s[tag]
+    '''
+    return dic
 
 def post_to_DB(client,data,measurement,tags,fields):
     unique_list = []
     output = set()
+    #print(data.head())
+    #data = data.dropna()
+    #data = data.dropna(axis='columns')
+    data = data.stack()
     print(data.head())
-    print(data.stack().head())
+    #print(list(data.head()))
+    data.columns = ['time', 'ap_name','fields']
+
+    print(data.head())
+    #print(data.columns)
+    data = data.reset_index()
+    #print(type(data.iloc(axis=0)[1,0]))
+    print(data.dtypes)
+    data.iloc[:,0] = data.iloc[:,0].apply(time_transform)
+    data.rename(index=str, columns={"level_1": "ap_name", "0": "connected_devices"})
+    data.columns = ['time', 'ap_name','connected_devices']
+    #data['connected_devices'] = data['connected_devices'].dropna()
+    data.dropna(inplace=True)
+    data['measurement'] = measurement
+    print(data.head())
+    data["fields"] = data.iloc[:,2].apply(transform_to_dict, key='connected_devices')
+    data["tags"] = data.iloc[:,1].apply(transform_to_dict, key='ap_name')
+    print(data.head())
+    #json = data[["measurement","time", "tags", "fields"]].head().to_dict("records")
+    #json = data.head().to_dict("records")
+    print(data.dtypes)
+    data['time'] = data['time'].astype(int)
+    print(data.dtypes)
+    print(data.head())
+    json = data[["measurement","time", "tags", "fields"]].to_dict("records")
+    ret = client.write_points(json,batch_size=16384)
+    #print(json)
+'''
+    #json = data[['ap_name', 'fields']].to_dict("records")
+    #print(json)
+    #data["time"] = data.loc['time'].apply(time_transform, time='time')
+    #print(data.head())
+    #print(tabulate(data, headers='keys', tablefmt='psql'))
+    #current_ap_name = data.iloc[[0],[0]].dtypes.index[0]
+
     for colNum in range(data.shape[1]): #loop through all columns
 
         #get column name which the name of the current access point
@@ -79,6 +135,7 @@ def post_to_DB(client,data,measurement,tags,fields):
         #print(parsed_ap_name)
 
         pushData = []
+
         for rowNum in range(data.shape[0]): #loop through all rows
 
             #get value from data frame a particular row x and column y
@@ -113,7 +170,7 @@ def post_to_DB(client,data,measurement,tags,fields):
         if(ret == False):
             print("Failed to push")
             break;
-
+'''
 ######################## MAIN ########################
 
 def main(conf_file="wifi_local_config.ini"):
