@@ -73,27 +73,28 @@ def transform_to_dict(s, key):
     dic[key] = s
     return dic
 
-def post_to_DB(client,data,measurement,tags,fields):
+def post_to_DB(client,json):
+    ret = client.write_points(json,batch_size=16384)
 
-    data = data.stack()
-    #print(data.head())
-    data.columns = ['time', 'ap_name','fields']
 
+
+def build_json(data, tags, fields, measurement):
     print(data.head())
-    data = data.reset_index()
     print(data.dtypes)
-    data.iloc[:,0] = data.iloc[:,0].apply(time_transform)
-    data.columns = ['time', 'ap_name','connected_devices']
-    data.dropna(inplace=True)
+
     data['measurement'] = measurement
     print(data.head())
     data["fields"] = data.iloc[:,2].apply(transform_to_dict, key=fields)
     data["tags"] = data.iloc[:,1].apply(transform_to_dict, key=tags)
-    data['time'] = data['time'].astype(int)
     print(data.dtypes)
     print(data.head())
-    json = data[["measurement","time", "tags", "fields"]].to_dict("records")
-    ret = client.write_points(json,batch_size=16384)
+
+    #build a list of dictionaries containing json data to give to client
+    #only take relevant columns from dataframe
+    json = data[["measurement","time", "tags", "fields"]].head().to_dict("records")
+    print(json)
+
+    return json
 
 ######################## MAIN ########################
 
@@ -125,7 +126,26 @@ def main(conf_file="wifi_local_config.ini"):
     # get and summarize wifi data
     data = pd.read_pickle(pickle_file)
 
-    # post to db
+    #get dataframe in right format before creating json
+    #puts all of the columns associated with a timestamp together
+    data = data.stack()
+    data = data.reset_index()
+
+    #change time in correct format
+    #time_transform changes from x to Unix Epoch time
+    #time can also be in x format, make sure that final datatype is string or int
+    data.iloc[:,0] = data.iloc[:,0].apply(time_transform)
+
+    #rename columns so that the proper keys will appear in the json list
+    #containing all the individual measurement, also make sure time is int not float
+    data.columns = ['time', tags, fields]
+    data['time'] = data['time'].astype(int)
+
+    #remove all of the rows which have NaN
+    #optional depending on if your data contains NaN
+    data.dropna(inplace=True)
+
+    # create client
     client =get_DB_client(host=host,
                           username=username,
                           password=password,
@@ -133,9 +153,11 @@ def main(conf_file="wifi_local_config.ini"):
                           port=port,
                           ssl=False,
                           verify_ssl=True)
+    #create json dictionary list to give to the client
+    json = build_json(data,tags,fields,measurement)
 
-    ret = post_to_DB(client,data,measurement,tags,fields)
-
+    #post to db
+    ret = post_to_DB(client,json)
     return
 
 if __name__ == "__main__":
