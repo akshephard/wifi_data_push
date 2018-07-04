@@ -68,9 +68,17 @@ def time_transform(timestamp):
     #print(pushTime)
     return int(pushTime)
 
-def transform_to_dict(s, key):
+'''def transform_to_dict(s, key):
     dic = {}
     dic[key] = s
+    return dic
+'''
+def transform_to_dict(s, tags):
+
+    dic = {}
+    for tag in tags:
+        dic[tag] = s[tag]
+
     return dic
 
 def post_to_DB(client,json):
@@ -84,8 +92,10 @@ def build_json(data, tags, fields, measurement):
 
     data['measurement'] = measurement
     print(data.head())
-    data["fields"] = data.iloc[:,2].apply(transform_to_dict, key=fields)
-    data["tags"] = data.iloc[:,1].apply(transform_to_dict, key=tags)
+    #data["fields"] = data.iloc[:,2].apply(transform_to_dict, tags=fields)
+    data["tags"] = data.apply(transform_to_dict, tags=tags, axis=1)
+    data["fields"] = data.apply(transform_to_dict, tags=fields, axis=1)
+    #data["tags"] = data.iloc[:,1].apply(transform_to_dict, tags=tags)
     print(data.dtypes)
     print(data.head())
 
@@ -119,7 +129,9 @@ def main(conf_file="wifi_local_config.ini"):
     measurement = Config.get("DB_config","measurement")
     port = Config.get("DB_config", "port")
     tags = Config.get("wifi_metadata", "tags")
+    tags = tags.split(',')
     fields = Config.get("wifi_metadata", "fields")
+    fields=fields.split(',')
 
 
 
@@ -138,9 +150,13 @@ def main(conf_file="wifi_local_config.ini"):
 
     #rename columns so that the proper keys will appear in the json list
     #containing all the individual measurement, also make sure time is int not float
-    data.columns = ['time', tags, fields]
+    print(data.head())
+    data.columns = ['time', 'ap_name', 'AP_count']
+    data['building_number'] = 90
+    data['floor'] = 2
+    data['room'] = 43
     data['time'] = data['time'].astype(int)
-
+    print(data.head())
     #remove all of the rows which have NaN
     #optional depending on if your data contains NaN
     data.dropna(inplace=True)
